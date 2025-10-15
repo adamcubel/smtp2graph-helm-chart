@@ -125,10 +125,7 @@ config:
   # SMTP receive configuration
   receive:
     port: 587
-    # listenAddress: "0.0.0.0"
-    secure: false
-    # tlsKeyPath: /data/tls/private.key
-    # tlsCertPath: /data/tls/server.crt
+    secure: true
     maxSize: 25m
     banner: "SMTP2Graph"
     # ipWhitelist: []
@@ -137,12 +134,12 @@ config:
     requireAuth: true
     # Rate limiter
     rateLimit:
-      duration: 600
-      limit: 10000
-    # Brute force protection
-    authLimit:
       duration: 60
       limit: 10
+    # Brute force protection
+    authLimit:
+      duration: 30
+      limit: 5
   # Send configuration (retry settings only - sensitive values come from secrets)
   send:
     retryLimit: 3
@@ -155,8 +152,10 @@ config:
   #   protocol: http
   #   username: ""
   #   password: ""
+
 # Secret configuration
-# These reference pre-existing secrets in the cluster
+# Supports both native Kubernetes Secrets and Google Cloud Secret Manager (via SecretProviderClass)
+# Set useSecretProviderClass: true to use GCP Secret Manager instead of Kubernetes secrets
 secrets:
   # Secret containing Azure App Registration details
   # Expected keys:
@@ -169,6 +168,7 @@ secrets:
   #   - forceMailbox: Force sending from this mailbox
   appRegistration:
     enabled: true
+    # Use native Kubernetes Secret
     secretName: "smtp2graph-appreg"
     tenantKey: "tenant"
     appIdKey: "appId"
@@ -176,20 +176,61 @@ secrets:
     certificateKeyKey: "certificateKey"
     # clientSecretKey: "clientSecret"
     # forceMailboxKey: "forceMailbox"
+
+    # OR use Google Cloud Secret Manager via SecretProviderClass
+    useSecretProviderClass: false
+    secretProviderClass:
+      # Name of the pre-existing SecretProviderClass resource
+      name: "smtp2graph-appreg-spc"
+      # Mount path for CSI driver secrets
+      mountPath: "/mnt/secrets-store/appreg"
+      # File names as they appear in the mounted volume
+      # These should match the filenames defined in your SecretProviderClass
+      tenantFile: "tenant"
+      appIdFile: "appId"
+      certificateThumbprintFile: "certificateThumbprint"
+      certificateKeyFile: "certificateKey"
+      # clientSecretFile: "clientSecret"
+      # forceMailboxFile: "forceMailbox"
+
   # Secret containing SMTP users for authentication
   # Expected format: JSON array of user objects
   # [{"username": "user1", "password": "pass1", "allowedFrom": ["email@example.com"]}, ...]
   # The key should contain a JSON string
   smtpUsers:
     enabled: true
+    # Use native Kubernetes Secret
     secretName: "smtp2graph-users"
     key: "users"
+
+    # OR use Google Cloud Secret Manager via SecretProviderClass
+    useSecretProviderClass: false
+    secretProviderClass:
+      # Name of the pre-existing SecretProviderClass resource
+      name: "smtp2graph-users-spc"
+      # Mount path for CSI driver secrets
+      mountPath: "/mnt/secrets-store/users"
+      # File name as it appears in the mounted volume
+      usersFile: "users"
+
   # Optional: Secret containing TLS certificate and key
   tls:
     enabled: false
+    # Use native Kubernetes Secret
     secretName: "smtp2graph-tls"
     certKey: "tls.crt"
     keyKey: "tls.key"
+
+    # OR use Google Cloud Secret Manager via SecretProviderClass
+    useSecretProviderClass: false
+    secretProviderClass:
+      # Name of the pre-existing SecretProviderClass resource
+      name: "smtp2graph-tls-spc"
+      # Mount path for CSI driver secrets
+      mountPath: "/mnt/secrets-store/tls"
+      # File names as they appear in the mounted volume
+      certFile: "tls.crt"
+      keyFile: "tls.key"
 # InitContainer configuration for config merging
 initContainer:
   image:

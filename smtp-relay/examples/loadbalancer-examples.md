@@ -1,7 +1,9 @@
 # LoadBalancer Service Configuration Examples
 
+```
 # Example 1: Basic LoadBalancer (default)
 # This is now the default configuration in values.yaml
+
 service:
   type: LoadBalancer
   port: 587
@@ -72,47 +74,60 @@ autoscaling:
   minReplicas: 3
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
+```
 
----
 # Helm Install Commands
 
-# Basic LoadBalancer
+- Basic LoadBalancer
+```
 helm install smtp-relay ./smtp-relay
+```
 
-# With static IP
+- With static IP
+```
 helm install smtp-relay ./smtp-relay \
   --set service.loadBalancerIP=203.0.113.50
+```
 
-# With IP restrictions
+- With IP restrictions
 helm install smtp-relay ./smtp-relay \
   --set service.loadBalancerSourceRanges={10.0.0.0/8,192.168.0.0/16}
 
-# Multi-replica with sticky sessions
+- Multi-replica with sticky sessions
+```
 helm install smtp-relay ./smtp-relay \
   --set replicaCount=3 \
   --set service.sessionAffinity=ClientIP \
   --set service.sessionAffinityConfig.clientIP.timeoutSeconds=10800
+```
 
-# Production-ready with all features
+- Production-ready with all features
+```
 helm install smtp-relay ./smtp-relay \
   --set replicaCount=3 \
   --set service.loadBalancerSourceRanges={203.0.113.0/24,198.51.100.0/24} \
   --set service.externalTrafficPolicy=Local \
   --set service.sessionAffinity=ClientIP \
   --set autoscaling.enabled=true
+```
 
----
 # Getting the LoadBalancer External IP
 
-# After installation, get the external IP:
+- After installation, get the external IP:
+```
 kubectl get svc smtp-relay -o wide
+```
 
-# Watch for the external IP to be assigned (can take 1-3 minutes):
+- Watch for the external IP to be assigned (can take 1-3 minutes):
+```
 kubectl get svc smtp-relay -w
+```
 
-# Get detailed service information:
+- Get detailed service information:
+```
 kubectl describe svc smtp-relay
+```
 
-# The EXTERNAL-IP column shows your LoadBalancer address
-# Use this address to configure your SMTP clients:
-# smtp.example.com → <EXTERNAL-IP>:587
+The EXTERNAL-IP column shows your LoadBalancer address
+- Use this address to configure your SMTP clients:
+  - smtp.example.com → <EXTERNAL-IP>:587
