@@ -40,7 +40,6 @@ spec:
           args:
             - -c
             - |
-              set -e
               echo "Starting configuration merge..."
 
               # Create directories
@@ -56,10 +55,10 @@ spec:
               yq eval -i '.send.appReg.tenant = strenv(TENANT)' /data/config.yml
               yq eval -i '.send.appReg.id = strenv(APP_ID)' /data/config.yml
               yq eval -i '.send.appReg.certificate.thumbprint = strenv(CERT_THUMBPRINT)' /data/config.yml
+              yq eval -i '.send.appReg.certificate.privateKeyPath = "/data/secrets/client.key"' /data/config.yml
 
               # Write certificate key to file
               echo "$CERT_KEY" > /data/secrets/client.key
-              chmod 444 /data/secrets/client.key
 
               {{- if .Values.secrets.appRegistration.clientSecretKey }}
               # Use client secret instead of certificate if provided
@@ -90,7 +89,6 @@ spec:
               echo "Setting up TLS certificates..."
               cp /tls-secret/tls.crt /data/tls/tls.crt
               cp /tls-secret/tls.key /data/tls/tls.key
-              chmod -R 444 /data/tls/
               {{- end }}
 
               echo "Configuration merge complete!"
