@@ -276,12 +276,66 @@ openssl s_client -connect localhost:587 -starttls smtp
 5. Use strong passwords for SMTP users
 6. Regularly rotate certificates and credentials
 
+## Contributing
+
+We welcome contributions! To contribute to this Helm chart:
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test your changes locally:
+   ```bash
+   helm lint smtp-relay
+   helm template test-release smtp-relay
+   helm install test-release smtp-relay --dry-run --debug
+   ```
+5. Create a PR with the appropriate version bump indicator in the title
+
+### Pull Request Title Format
+
+PR titles must include a version bump indicator:
+
+- `[major]` - Breaking changes (e.g., `[major] Rename values.yaml structure`)
+- `[minor]` - New features (e.g., `[minor] Add support for external secrets`)
+- `[patch]` - Bug fixes (e.g., `[patch] Fix probe configuration`)
+
+Example: `[minor] Add support for Google Cloud Secret Manager`
+
+### CI/CD Pipeline
+
+This repository uses GitHub Actions for automated testing and releases:
+
+**PR Workflow** (`.github/workflows/pr-build.yaml`):
+- Lints the Helm chart
+- Validates templates render correctly
+- Checks for version bump indicator in PR title
+- Posts build summary as PR comment
+
+**Release Workflow** (`.github/workflows/release.yaml`):
+- Automatically triggers when PR is merged to `main`
+- Updates `Chart.yaml` version based on PR title
+- Creates git tag
+- Packages and publishes Helm chart
+- Updates GitHub Pages Helm repository
+
+### Setting Up Deploy Key
+
+The release workflow requires a deploy key to push version updates to the protected `main` branch. See [.github/DEPLOY_KEY_SETUP.md](.github/DEPLOY_KEY_SETUP.md) for detailed setup instructions.
+
+**Quick Setup**:
+1. Generate SSH key: `ssh-keygen -t ed25519 -f ~/.ssh/smtp2graph_deploy_key`
+2. Add public key as deploy key in GitHub (with write access)
+3. Add private key as `DEPLOY_KEY` secret in repository settings
+
 ## Additional Resources
 
 - [SMTP2Graph Documentation](https://www.smtp2graph.com)
 - [SMTP2Graph GitHub](https://github.com/SMTP2Graph/SMTP2Graph)
 - [Microsoft Graph API](https://docs.microsoft.com/en-us/graph/)
 - [Helm Documentation](https://helm.sh/docs/)
+- [Deploy Key Setup Guide](.github/DEPLOY_KEY_SETUP.md)
 
 ## License
 

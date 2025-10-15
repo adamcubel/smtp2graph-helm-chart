@@ -16,10 +16,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
       - name: Configure Git
         run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
@@ -63,13 +64,32 @@ jobs:
       - name: Update Chart.yaml version
         run: |
           NEW_VERSION="${{ steps.version.outputs.version }}"
-          sed -i "s/^version:.*/version: $NEW_VERSION/" smtp-relay/Chart.yaml
-          echo "Updated Chart.yaml to version $NEW_VERSION"
+
+          # Get current version to check if update is needed
+          CURRENT_VERSION=$(grep '^version:' smtp-relay/Chart.yaml | awk '{print $2}')
+          echo "Current version: $CURRENT_VERSION"
+          echo "New version: $NEW_VERSION"
+
+          if [ "$CURRENT_VERSION" = "$NEW_VERSION" ]; then
+            echo "Version is already $NEW_VERSION, no update needed"
+            echo "needs_update=false" >> $GITHUB_ENV
+          else
+            # Update version in Chart.yaml using sed
+            sed -i "s/^version: .*/version: ${NEW_VERSION}/" smtp-relay/Chart.yaml
+            echo "Updated Chart.yaml from $CURRENT_VERSION to $NEW_VERSION"
+            echo "needs_update=true" >> $GITHUB_ENV
+
+            # Verify the change
+            echo "New Chart.yaml version line:"
+            grep '^version:' smtp-relay/Chart.yaml
+          fi
       - name: Commit version update
+        if: env.needs_update == 'true'
         run: |
           git add smtp-relay/Chart.yaml
-          git commit -m "chore: bump chart version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
-          git push origin main || echo "No changes to push"
+          git commit -m "chore: bump chart version to ${{ steps.version.outputs.version }} [skip ci]"
+          git push origin main
+          echo "✅ Chart.yaml version updated and pushed to main"
       - name: Update Helm dependencies
         run: |
           helm dependency update smtp-relay
