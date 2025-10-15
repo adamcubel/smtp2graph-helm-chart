@@ -4,7 +4,6 @@
 
 # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
 replicaCount: 1
-
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
   repository: smtp2graph/smtp2graph
@@ -12,13 +11,11 @@ image:
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "v1.1.4"
-
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
 # This is to override the chart name.
 nameOverride: ""
 fullnameOverride: ""
-
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
   # Specifies whether a service account should be created
@@ -30,98 +27,55 @@ serviceAccount:
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
-
 # This is for setting Kubernetes Annotations to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 podAnnotations: {}
 # This is for setting Kubernetes Labels to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
-
 podSecurityContext: {}
-  # fsGroup: 2000
+# fsGroup: 2000
 
 securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+# capabilities:
+#   drop:
+#   - ALL
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
+# runAsUser: 1000
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
   # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
-  type: ClusterIP
+  type: LoadBalancer
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
   port: 587
-
-# This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-# -- Expose the service via gateway-api HTTPRoute
-# Requires Gateway API resources and suitable controller installed within the cluster
-# (see: https://gateway-api.sigs.k8s.io/guides/)
-httpRoute:
-  # HTTPRoute enabled.
-  enabled: false
-  # HTTPRoute annotations.
-  annotations: {}
-  # Which Gateways this Route is attached to.
-  parentRefs:
-  - name: gateway
-    sectionName: http
-    # namespace: default
-  # Hostnames matching HTTP header.
-  hostnames:
-  - chart-example.local
-  # List of rules and filters applied.
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /headers
-  #   filters:
-  #   - type: RequestHeaderModifier
-  #     requestHeaderModifier:
-  #       set:
-  #       - name: My-Overwrite-Header
-  #         value: this-is-the-only-value
-  #       remove:
-  #       - User-Agent
-  # - matches:
-  #   - path:
-  #       type: PathPrefix
-  #       value: /echo
-  #     headers:
-  #     - name: version
-  #       value: v2
+  # LoadBalancer specific configurations
+  # Specify a static IP address for the LoadBalancer (cloud provider dependent)
+  # loadBalancerIP: ""
+  # Restrict access to the LoadBalancer from specific IP CIDR ranges
+  # loadBalancerSourceRanges: []
+  #   - "10.0.0.0/8"
+  #   - "192.168.0.0/16"
+  # External traffic policy: "Cluster" (default) or "Local" (preserves client source IP)
+  # externalTrafficPolicy: Cluster
+  # Session affinity: "None" (default) or "ClientIP" (sticky sessions)
+  # sessionAffinity: None
+  # sessionAffinityConfig:
+  #   clientIP:
+  #     timeoutSeconds: 10800
 
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+# limits:
+#   cpu: 100m
+#   memory: 128Mi
+# requests:
+#   cpu: 100m
+#   memory: 128Mi
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 # SMTP2Graph listens on port 587 for SMTP protocol, so we use tcpSocket probes to verify the port is available
@@ -141,7 +95,6 @@ readinessProbe:
   timeoutSeconds: 3
   successThreshold: 1
   failureThreshold: 3
-
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
   enabled: false
@@ -149,7 +102,6 @@ autoscaling:
   maxReplicas: 100
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
-
 # Additional volumes on the output Deployment definition.
 volumes: []
 # - name: foo
@@ -164,7 +116,83 @@ volumeMounts: []
 #   readOnly: true
 
 nodeSelector: {}
-
 tolerations: []
-
 affinity: {}
+# SMTP2Graph application configuration
+config:
+  # Operation mode: full, receive, or send
+  mode: full
+  # SMTP receive configuration
+  receive:
+    port: 587
+    # listenAddress: "0.0.0.0"
+    secure: false
+    # tlsKeyPath: /data/tls/private.key
+    # tlsCertPath: /data/tls/server.crt
+    maxSize: 25m
+    banner: "SMTP2Graph"
+    # ipWhitelist: []
+    # allowedFrom: []
+    allowInsecureAuth: false
+    requireAuth: true
+    # Rate limiter
+    rateLimit:
+      duration: 600
+      limit: 10000
+    # Brute force protection
+    authLimit:
+      duration: 60
+      limit: 10
+  # Send configuration (retry settings only - sensitive values come from secrets)
+  send:
+    retryLimit: 3
+    retryInterval: 5
+    # forceMailbox: ""
+  # HTTP proxy configuration (optional)
+  # httpProxy:
+  #   host: localhost
+  #   port: 3000
+  #   protocol: http
+  #   username: ""
+  #   password: ""
+# Secret configuration
+# These reference pre-existing secrets in the cluster
+secrets:
+  # Secret containing Azure App Registration details
+  # Expected keys:
+  #   - tenant: Azure tenant name or ID
+  #   - appId: Application (client) ID
+  #   - certificateThumbprint: Certificate thumbprint
+  #   - certificateKey: Private key content (PEM format)
+  # Optional:
+  #   - clientSecret: Client secret (alternative to certificate)
+  #   - forceMailbox: Force sending from this mailbox
+  appRegistration:
+    enabled: true
+    secretName: "smtp2graph-appreg"
+    tenantKey: "tenant"
+    appIdKey: "appId"
+    certificateThumbprintKey: "certificateThumbprint"
+    certificateKeyKey: "certificateKey"
+    # clientSecretKey: "clientSecret"
+    # forceMailboxKey: "forceMailbox"
+  # Secret containing SMTP users for authentication
+  # Expected format: JSON array of user objects
+  # [{"username": "user1", "password": "pass1", "allowedFrom": ["email@example.com"]}, ...]
+  # The key should contain a JSON string
+  smtpUsers:
+    enabled: true
+    secretName: "smtp2graph-users"
+    key: "users"
+  # Optional: Secret containing TLS certificate and key
+  tls:
+    enabled: false
+    secretName: "smtp2graph-tls"
+    certKey: "tls.crt"
+    keyKey: "tls.key"
+# InitContainer configuration for config merging
+initContainer:
+  image:
+    repository: mikefarah/yq
+    tag: "4"
+    pullPolicy: IfNotPresent

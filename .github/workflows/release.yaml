@@ -1,0 +1,142 @@
+name: Release Helm Chart
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  pull-requests: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+      - name: Determine version bump from merged PR
+        id: version
+        run: |
+          # Get the merge commit message (contains PR title)
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Commit message: $COMMIT_MSG"
+
+          # Get current version from Chart.yaml
+          CURRENT_VERSION=$(grep '^version:' smtp-relay/Chart.yaml | awk '{print $2}')
+          echo "Current version: $CURRENT_VERSION"
+
+          # Parse version
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+
+          # Check for version bump indicator in commit message
+          if [[ "$COMMIT_MSG" =~ \[major\] ]]; then
+            major=$((major + 1))
+            minor=0
+            patch=0
+            BUMP_TYPE="major"
+          elif [[ "$COMMIT_MSG" =~ \[minor\] ]]; then
+            minor=$((minor + 1))
+            patch=0
+            BUMP_TYPE="minor"
+          elif [[ "$COMMIT_MSG" =~ \[patch\] ]]; then
+            patch=$((patch + 1))
+            BUMP_TYPE="patch"
+          else
+            # Default to patch if no indicator
+            patch=$((patch + 1))
+            BUMP_TYPE="patch (default)"
+          fi
+
+          NEW_VERSION="${major}.${minor}.${patch}"
+          echo "New version: $NEW_VERSION (${BUMP_TYPE})"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      - name: Update Chart.yaml version
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/^version:.*/version: $NEW_VERSION/" smtp-relay/Chart.yaml
+          echo "Updated Chart.yaml to version $NEW_VERSION"
+      - name: Commit version update
+        run: |
+          git add smtp-relay/Chart.yaml
+          git commit -m "chore: bump chart version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+          git push origin main || echo "No changes to push"
+      - name: Update Helm dependencies
+        run: |
+          helm dependency update smtp-relay
+      - name: Package Helm chart
+        run: |
+          mkdir -p .cr-release-packages
+          helm package smtp-relay -d .cr-release-packages
+      - name: Create Git tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git tag -a "v${VERSION}" -m "Release version ${VERSION}"
+          git push origin "v${VERSION}"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          files: .cr-release-packages/*.tgz
+          generate_release_notes: true
+      - name: Update Helm repository index
+        run: |
+          git config --global user.name "$GITHUB_ACTOR"
+          git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+          # Clone gh-pages branch or create it
+          git clone --single-branch --branch gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages || {
+            echo "Creating new gh-pages branch"
+            mkdir gh-pages
+            cd gh-pages
+            git init
+            git checkout -b gh-pages
+            git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          }
+
+          cd gh-pages
+
+          # Copy packaged charts
+          mkdir -p charts
+          cp ../.cr-release-packages/*.tgz charts/ || true
+
+          # Generate index
+          helm repo index charts --url "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}"
+
+          # Commit and push (use -f to force add ignored files)
+          git add -f charts/
+          git commit -m "Release v${{ steps.version.outputs.version }}" || echo "No changes"
+          git push origin gh-pages
+      - name: Display repository URLs
+        run: |
+          echo "=============================================="
+          echo "🎉 Helm Chart Released Successfully!"
+          echo "=============================================="
+          echo ""
+          echo "📦 Version: v${{ steps.version.outputs.version }}"
+          echo ""
+          echo "📥 Add the Helm repository:"
+          echo "   helm repo add ${{ github.event.repository.name }} https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          echo ""
+          echo "🔄 Update repositories:"
+          echo "   helm repo update"
+          echo ""
+          echo "⬇️  Install the chart:"
+          echo "   helm install myapp ${{ github.event.repository.name }}/${{ github.event.repository.name }} --version ${{ steps.version.outputs.version }}"
+          echo ""
+          echo "🔗 Links:"
+          echo "   • GitHub Release: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}"
+          echo "   • Helm Repository: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          echo "   • Chart Package: https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/${{ github.event.repository.name }}-${{ steps.version.outputs.version }}.tgz"
+          echo ""
+          echo "=============================================="

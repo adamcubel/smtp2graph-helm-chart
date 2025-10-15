@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "smtp-relay.fullname" . }}
+  labels:
+    {{- include "smtp-relay.labels" . | nindent 4 }}
+data:
+  base-config.yml: |
+    # Base SMTP2Graph configuration (non-sensitive values)
+    # Sensitive values will be merged from secrets by the initContainer
+
+    mode: {{ .Values.config.mode }}
+
+    {{- if or (eq .Values.config.mode "full") (eq .Values.config.mode "receive") }}
+    receive:
+      port: {{ .Values.config.receive.port }}
+      {{- with .Values.config.receive.listenAddress }}
+      listenAddress: {{ . }}
+      {{- end }}
+      secure: {{ .Values.config.receive.secure }}
+      {{- if .Values.secrets.tls.enabled }}
+      tlsKeyPath: /data/tls/tls.key
+      tlsCertPath: /data/tls/tls.crt
+      {{- end }}
+      maxSize: {{ .Values.config.receive.maxSize }}
+      banner: {{ .Values.config.receive.banner | quote }}
+      {{- with .Values.config.receive.ipWhitelist }}
+      ipWhitelist:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.config.receive.allowedFrom }}
+      allowedFrom:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      allowInsecureAuth: {{ .Values.config.receive.allowInsecureAuth }}
+      requireAuth: {{ .Values.config.receive.requireAuth }}
+      {{- with .Values.config.receive.rateLimit }}
+      rateLimit:
+        duration: {{ .duration }}
+        limit: {{ .limit }}
+      {{- end }}
+      {{- with .Values.config.receive.authLimit }}
+      authLimit:
+        duration: {{ .duration }}
+        limit: {{ .limit }}
+      {{- end }}
+      # Users will be populated by initContainer from secret
+      users: []
+    {{- end }}
+
+    {{- if or (eq .Values.config.mode "full") (eq .Values.config.mode "send") }}
+    send:
+      # App registration details will be populated by initContainer from secret
+      appReg:
+        tenant: ""
+        id: ""
+        certificate:
+          thumbprint: ""
+          privateKeyPath: /data/secrets/client.key
+      retryLimit: {{ .Values.config.send.retryLimit }}
+      retryInterval: {{ .Values.config.send.retryInterval }}
+      {{- with .Values.config.send.forceMailbox }}
+      forceMailbox: {{ . }}
+      {{- end }}
+    {{- end }}
+
+    {{- with .Values.config.httpProxy }}
+    httpProxy:
+      host: {{ .host }}
+      port: {{ .port }}
+      {{- with .protocol }}
+      protocol: {{ . }}
+      {{- end }}
+      {{- with .username }}
+      username: {{ . }}
+      {{- end }}
+      {{- with .password }}
+      password: {{ . }}
+      {{- end }}
+    {{- end }}
