@@ -1,0 +1,15 @@
+apiVersion: v1
+entries:
+  smtp-relay:
+  - apiVersion: v2
+    appVersion: v1.1.4
+    created: "2025-10-15T15:27:56.437198407Z"
+    description: A Helm chart for Kubernetes
+    digest: 1d6bfd32b1847e962cc7432b93ec5a1cb05b2cc1f5e42310cd1f3636098d3617
+    icon: https://www.smtp2graph.com/media/logo.png
+    name: smtp-relay
+    type: application
+    urls:
+    - https://github.com/adamcubel/smtp2graph-helm-chart/releases/download/v0.1.1/smtp-relay-0.1.1.tgz
+    version: 0.1.1
+generated: "2025-10-15T15:27:56.436418546Z"
