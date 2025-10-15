@@ -43,6 +43,10 @@ spec:
               set -e
               echo "Starting configuration merge..."
 
+              # Create directories
+              mkdir -p /data/secrets
+              mkdir -p /data/tls
+
               # Copy base config
               cp /config/base-config.yml /data/config.yml
 
@@ -54,8 +58,6 @@ spec:
               yq eval -i '.send.appReg.certificate.thumbprint = strenv(CERT_THUMBPRINT)' /data/config.yml
 
               # Write certificate key to file
-              mkdir -p /data/secrets/
-              sleep 1
               echo "$CERT_KEY" > /data/secrets/client.key
               chmod 444 /data/secrets/client.key
 
@@ -86,8 +88,6 @@ spec:
               {{- if .Values.secrets.tls.enabled }}
               # Copy TLS certificates
               echo "Setting up TLS certificates..."
-              mkdir -p /data/tls/
-              sleep 1
               cp /tls-secret/tls.crt /data/tls/tls.crt
               cp /tls-secret/tls.key /data/tls/tls.key
               chmod -R 444 /data/tls/
