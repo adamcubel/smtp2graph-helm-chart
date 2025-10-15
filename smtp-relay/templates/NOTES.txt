@@ -1,0 +1,77 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To get the status of your deployment, run:
+  kubectl get pods -n {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "smtp-relay.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+
+{{- if .Values.secrets.appRegistration.enabled }}
+
+IMPORTANT: Azure App Registration Secret
+=========================================
+This chart expects a secret named "{{ .Values.secrets.appRegistration.secretName }}" with the following keys:
+
+  kubectl create secret generic {{ .Values.secrets.appRegistration.secretName }} \
+    --from-literal={{ .Values.secrets.appRegistration.tenantKey }}=<your-tenant-id-or-name> \
+    --from-literal={{ .Values.secrets.appRegistration.appIdKey }}=<your-app-id> \
+    --from-literal={{ .Values.secrets.appRegistration.certificateThumbprintKey }}=<cert-thumbprint> \
+    --from-file={{ .Values.secrets.appRegistration.certificateKeyKey }}=<path-to-private-key.pem>
+
+Alternative (using client secret instead of certificate):
+  kubectl create secret generic {{ .Values.secrets.appRegistration.secretName }} \
+    --from-literal={{ .Values.secrets.appRegistration.tenantKey }}=<your-tenant-id-or-name> \
+    --from-literal={{ .Values.secrets.appRegistration.appIdKey }}=<your-app-id> \
+    --from-literal=clientSecret=<your-client-secret>
+{{- end }}
+
+{{- if .Values.secrets.smtpUsers.enabled }}
+
+SMTP Users Secret
+==================
+This chart expects a secret named "{{ .Values.secrets.smtpUsers.secretName }}" with SMTP user credentials.
+
+Create the secret with a JSON array of users:
+
+  kubectl create secret generic {{ .Values.secrets.smtpUsers.secretName }} \
+    --from-literal={{ .Values.secrets.smtpUsers.key }}='[{"username":"user1","password":"pass1","allowedFrom":["email@example.com"]},{"username":"user2","password":"pass2"}]'
+
+Each user object can have:
+  - username: (required) SMTP username
+  - password: (required) SMTP password
+  - allowedFrom: (optional) Array of allowed sender email addresses
+{{- end }}
+
+{{- if .Values.secrets.tls.enabled }}
+
+TLS Certificate Secret
+======================
+This chart expects a secret named "{{ .Values.secrets.tls.secretName }}" with TLS certificate and key:
+
+  kubectl create secret tls {{ .Values.secrets.tls.secretName }} \
+    --cert=<path-to-cert.crt> \
+    --key=<path-to-key.key>
+{{- end }}
+
+SMTP Service
+============
+The SMTP service is available on port {{ .Values.service.port }}.
+
+{{- if eq .Values.service.type "ClusterIP" }}
+To connect to the SMTP service from within the cluster:
+  {{ include "smtp-relay.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+{{- end }}
+
+{{- if eq .Values.service.type "LoadBalancer" }}
+It may take a few minutes for the LoadBalancer IP to be available.
+Watch the status with:
+  kubectl get svc -n {{ .Release.Namespace }} -w {{ include "smtp-relay.fullname" . }}
+{{- end }}
+
+For more information about SMTP2Graph, visit:
+  https://www.smtp2graph.com
+  https://github.com/SMTP2Graph/SMTP2Graph
+
+Configuration
+=============
+You can view the merged configuration by checking the initContainer logs:
+  kubectl logs -n {{ .Release.Namespace }} <pod-name> -c config-init

@@ -1,0 +1,118 @@
+# LoadBalancer Service Configuration Examples
+
+# Example 1: Basic LoadBalancer (default)
+# This is now the default configuration in values.yaml
+service:
+  type: LoadBalancer
+  port: 587
+
+---
+# Example 2: LoadBalancer with Static IP
+# Useful when you need a consistent IP address for DNS or firewall rules
+# Note: The IP must be available in your cloud provider's pool
+service:
+  type: LoadBalancer
+  port: 587
+  loadBalancerIP: "203.0.113.50"
+
+---
+# Example 3: LoadBalancer with IP Restrictions
+# Only allow connections from specific IP ranges (great for security)
+service:
+  type: LoadBalancer
+  port: 587
+  loadBalancerSourceRanges:
+    - "10.0.0.0/8"        # Internal corporate network
+    - "192.168.0.0/16"    # Private network
+    - "203.0.113.0/24"    # Specific public subnet
+
+---
+# Example 4: LoadBalancer with Source IP Preservation
+# Use "Local" to preserve the client's source IP address
+# Note: This disables cross-node load balancing
+service:
+  type: LoadBalancer
+  port: 587
+  externalTrafficPolicy: Local
+
+---
+# Example 5: LoadBalancer with Sticky Sessions
+# Keep the same client connected to the same pod for 3 hours
+# Useful for stateful connections or session-based authentication
+service:
+  type: LoadBalancer
+  port: 587
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours
+
+---
+# Example 6: Production-Ready Configuration
+# Combines multiple features for a production environment
+replicaCount: 3  # Run 3 replicas for high availability
+
+service:
+  type: LoadBalancer
+  port: 587
+  # Restrict to your office and production networks
+  loadBalancerSourceRanges:
+    - "203.0.113.0/24"
+    - "198.51.100.0/24"
+  # Preserve source IP for logging and security
+  externalTrafficPolicy: Local
+  # Sticky sessions for better connection handling
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+---
+# Helm Install Commands
+
+# Basic LoadBalancer
+helm install smtp-relay ./smtp-relay
+
+# With static IP
+helm install smtp-relay ./smtp-relay \
+  --set service.loadBalancerIP=203.0.113.50
+
+# With IP restrictions
+helm install smtp-relay ./smtp-relay \
+  --set service.loadBalancerSourceRanges={10.0.0.0/8,192.168.0.0/16}
+
+# Multi-replica with sticky sessions
+helm install smtp-relay ./smtp-relay \
+  --set replicaCount=3 \
+  --set service.sessionAffinity=ClientIP \
+  --set service.sessionAffinityConfig.clientIP.timeoutSeconds=10800
+
+# Production-ready with all features
+helm install smtp-relay ./smtp-relay \
+  --set replicaCount=3 \
+  --set service.loadBalancerSourceRanges={203.0.113.0/24,198.51.100.0/24} \
+  --set service.externalTrafficPolicy=Local \
+  --set service.sessionAffinity=ClientIP \
+  --set autoscaling.enabled=true
+
+---
+# Getting the LoadBalancer External IP
+
+# After installation, get the external IP:
+kubectl get svc smtp-relay -o wide
+
+# Watch for the external IP to be assigned (can take 1-3 minutes):
+kubectl get svc smtp-relay -w
+
+# Get detailed service information:
+kubectl describe svc smtp-relay
+
+# The EXTERNAL-IP column shows your LoadBalancer address
+# Use this address to configure your SMTP clients:
+# smtp.example.com → <EXTERNAL-IP>:587
