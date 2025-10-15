@@ -1,0 +1,62 @@
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # Prevent committing large files
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+      # Check for files that would conflict in case-insensitive filesystems
+      - id: check-case-conflict
+      # Check for merge conflicts
+      - id: check-merge-conflict
+      # Check YAML syntax
+      - id: check-yaml
+        args: ['--allow-multiple-documents']
+        exclude: 'examples/.*\.yaml|templates/.*\.yaml$'
+      # Check JSON syntax
+      - id: check-json
+      # Ensure files end with a newline
+      - id: end-of-file-fixer
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        args: ['--markdown-linebreak-ext=md']
+      # Prevent committing to main
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+  # YAML formatting and linting
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.10.0
+    hooks:
+      - id: yamlfmt
+        exclude: 'examples/.*\.yaml|templates/.*\.yaml$|Chart\.yaml$|values\.yaml$'
+  # Helm-specific checks
+  - repo: https://github.com/gruntwork-io/pre-commit
+    rev: v0.1.23
+    hooks:
+      # Lint Helm charts
+      - id: helmlint
+        args: ['--chart-dir', '.']
+  # Validate Chart.yaml version format
+  - repo: local
+    hooks:
+      - id: validate-chart-version
+        name: Validate Chart.yaml version
+        entry: bash -c 'grep -E "^version:[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+$" Chart.yaml || (echo "Error Chart.yaml version must follow semver (x.y.z)" && exit 1)'
+        language: system
+        files: ^Chart\.yaml$
+        pass_filenames: false
+      # Ensure Chart.yaml and values.yaml are valid
+      - id: helm-template-test
+        name: Helm template rendering test
+        entry: bash -c 'helm template test-release . > /dev/null && echo "Helm templates render successfully"'
+        language: system
+        files: ^(Chart\.yaml|values\.yaml|templates/.*)$
+        pass_filenames: false
+      # Check for secrets in values.yaml
+      - id: check-default-secrets
+        name: Check for hardcoded secrets in values.yaml
+        entry: bash -c 'if grep -E "(password|secret|key):[[:space:]]+[^\"]*[a-zA-Z0-9]{16,}" values.yaml | grep -v "changeme" | grep -v "your-"; then echo "Warning Potential hardcoded secret found in values.yaml" && exit 1; fi'
+        language: system
+        files: ^values\.yaml$
+        pass_filenames: false
