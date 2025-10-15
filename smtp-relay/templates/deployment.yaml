@@ -54,6 +54,7 @@ spec:
               yq eval -i '.send.appReg.certificate.thumbprint = strenv(CERT_THUMBPRINT)' /data/config.yml
 
               # Write certificate key to file
+              mkdir -p /data/secrets/
               echo "$CERT_KEY" > /data/secrets/client.key
               chmod 444 /data/secrets/client.key
 
