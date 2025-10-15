@@ -49,6 +49,23 @@ spec:
               {{- if .Values.secrets.appRegistration.enabled }}
               # Merge Azure App Registration details
               echo "Merging app registration details..."
+              {{- if .Values.secrets.appRegistration.useSecretProviderClass }}
+              # Read from CSI volume files
+              TENANT=$(cat {{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.tenantFile }})
+              APP_ID=$(cat {{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.appIdFile }})
+              CERT_THUMBPRINT=$(cat {{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.certificateThumbprintFile }})
+              CERT_KEY=$(cat {{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.certificateKeyFile }})
+              {{- if .Values.secrets.appRegistration.secretProviderClass.clientSecretFile }}
+              if [ -f "{{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.clientSecretFile }}" ]; then
+                CLIENT_SECRET=$(cat {{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.clientSecretFile }})
+              fi
+              {{- end }}
+              {{- if .Values.secrets.appRegistration.secretProviderClass.forceMailboxFile }}
+              if [ -f "{{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.forceMailboxFile }}" ]; then
+                FORCE_MAILBOX=$(cat {{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}/{{ .Values.secrets.appRegistration.secretProviderClass.forceMailboxFile }})
+              fi
+              {{- end }}
+              {{- end }}
               yq eval -i '.send.appReg.tenant = strenv(TENANT)' /data/config.yml
               yq eval -i '.send.appReg.id = strenv(APP_ID)' /data/config.yml
               yq eval -i '.send.appReg.certificate.thumbprint = strenv(CERT_THUMBPRINT)' /data/config.yml
@@ -58,7 +75,7 @@ spec:
               echo "$CERT_KEY" > /data/secrets/client.key
               chmod 444 /data/secrets/client.key
 
-              {{- if .Values.secrets.appRegistration.clientSecretKey }}
+              {{- if or .Values.secrets.appRegistration.clientSecretKey .Values.secrets.appRegistration.secretProviderClass.clientSecretFile }}
               # Use client secret instead of certificate if provided
               if [ ! -z "$CLIENT_SECRET" ]; then
                 yq eval -i '.send.appReg.secret = strenv(CLIENT_SECRET)' /data/config.yml
@@ -66,7 +83,7 @@ spec:
               fi
               {{- end }}
 
-              {{- if .Values.secrets.appRegistration.forceMailboxKey }}
+              {{- if or .Values.secrets.appRegistration.forceMailboxKey .Values.secrets.appRegistration.secretProviderClass.forceMailboxFile }}
               if [ ! -z "$FORCE_MAILBOX" ]; then
                 yq eval -i '.send.forceMailbox = strenv(FORCE_MAILBOX)' /data/config.yml
               fi
@@ -76,6 +93,10 @@ spec:
               {{- if .Values.secrets.smtpUsers.enabled }}
               # Merge SMTP users from secret
               echo "Merging SMTP users..."
+              {{- if .Values.secrets.smtpUsers.useSecretProviderClass }}
+              # Read from CSI volume file
+              SMTP_USERS=$(cat {{ .Values.secrets.smtpUsers.secretProviderClass.mountPath }}/{{ .Values.secrets.smtpUsers.secretProviderClass.usersFile }})
+              {{- end }}
               echo "$SMTP_USERS" > /tmp/users.json
               yq eval -i '.receive.users = load("/tmp/users.json")' /data/config.yml
               {{- end }}
@@ -83,15 +104,22 @@ spec:
               {{- if .Values.secrets.tls.enabled }}
               # Copy TLS certificates
               echo "Setting up TLS certificates..."
+              {{- if .Values.secrets.tls.useSecretProviderClass }}
+              # Copy from CSI volume
+              cp {{ .Values.secrets.tls.secretProviderClass.mountPath }}/{{ .Values.secrets.tls.secretProviderClass.certFile }} /data/tls/tls.crt
+              cp {{ .Values.secrets.tls.secretProviderClass.mountPath }}/{{ .Values.secrets.tls.secretProviderClass.keyFile }} /data/tls/tls.key
+              {{- else }}
+              # Copy from Kubernetes secret volume
               cp /tls-secret/tls.crt /data/tls/tls.crt
               cp /tls-secret/tls.key /data/tls/tls.key
+              {{- end }}
               chmod -R 444 /data/tls/
               {{- end }}
 
               echo "Configuration merge complete!"
               cat /data/config.yml
           env:
-            {{- if .Values.secrets.appRegistration.enabled }}
+            {{- if and .Values.secrets.appRegistration.enabled (not .Values.secrets.appRegistration.useSecretProviderClass) }}
             - name: TENANT
               valueFrom:
                 secretKeyRef:
@@ -129,7 +157,7 @@ spec:
                   optional: true
             {{- end }}
             {{- end }}
-            {{- if .Values.secrets.smtpUsers.enabled }}
+            {{- if and .Values.secrets.smtpUsers.enabled (not .Values.secrets.smtpUsers.useSecretProviderClass) }}
             - name: SMTP_USERS
               valueFrom:
                 secretKeyRef:
@@ -141,7 +169,22 @@ spec:
               mountPath: /config
             - name: data
               mountPath: /data
-            {{- if .Values.secrets.tls.enabled }}
+            {{- if and .Values.secrets.appRegistration.enabled .Values.secrets.appRegistration.useSecretProviderClass }}
+            - name: appreg-secrets
+              mountPath: {{ .Values.secrets.appRegistration.secretProviderClass.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if and .Values.secrets.smtpUsers.enabled .Values.secrets.smtpUsers.useSecretProviderClass }}
+            - name: users-secrets
+              mountPath: {{ .Values.secrets.smtpUsers.secretProviderClass.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if and .Values.secrets.tls.enabled .Values.secrets.tls.useSecretProviderClass }}
+            - name: tls-secrets
+              mountPath: {{ .Values.secrets.tls.secretProviderClass.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if and .Values.secrets.tls.enabled (not .Values.secrets.tls.useSecretProviderClass) }}
             - name: tls-secret
               mountPath: /tls-secret
               readOnly: true
@@ -182,7 +225,31 @@ spec:
             name: {{ include "smtp-relay.fullname" . }}
         - name: data
           emptyDir: {}
-        {{- if .Values.secrets.tls.enabled }}
+        {{- if and .Values.secrets.appRegistration.enabled .Values.secrets.appRegistration.useSecretProviderClass }}
+        - name: appreg-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ .Values.secrets.appRegistration.secretProviderClass.name }}
+        {{- end }}
+        {{- if and .Values.secrets.smtpUsers.enabled .Values.secrets.smtpUsers.useSecretProviderClass }}
+        - name: users-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ .Values.secrets.smtpUsers.secretProviderClass.name }}
+        {{- end }}
+        {{- if and .Values.secrets.tls.enabled .Values.secrets.tls.useSecretProviderClass }}
+        - name: tls-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ .Values.secrets.tls.secretProviderClass.name }}
+        {{- end }}
+        {{- if and .Values.secrets.tls.enabled (not .Values.secrets.tls.useSecretProviderClass) }}
         - name: tls-secret
           secret:
             secretName: {{ .Values.secrets.tls.secretName }}

@@ -21,7 +21,13 @@ A Helm chart for deploying [SMTP2Graph](https://www.smtp2graph.com) on Kubernete
 
 ## Installation
 
+The chart supports two methods for managing secrets:
+1. **Kubernetes Secrets** (default) - Native Kubernetes secrets
+2. **Google Cloud Secret Manager** - Using SecretProviderClass and CSI driver
+
 ### 1. Create Required Secrets
+
+#### Option A: Using Kubernetes Secrets (Default)
 
 Before installing the chart, you must create the required secrets in your cluster.
 
@@ -56,17 +62,127 @@ kubectl create secret tls smtp2graph-tls \
 
 See [examples/secret-tls.yaml](smtp-relay/examples/secret-tls.yaml) for more details.
 
-### 2. Install the Chart
+#### Option B: Using Google Cloud Secret Manager
+
+For GKE clusters, you can use Google Cloud Secret Manager with the Secrets Store CSI Driver.
+
+**Prerequisites:**
+- GKE cluster with Workload Identity enabled
+- Secrets Store CSI Driver installed
+- Google Cloud Secret Manager API enabled
+
+**1. Create SecretProviderClass resources:**
 
 ```bash
-# Add the repository (if published)
-helm repo add smtp2graph ./smtp-relay
-helm repo update
+# Apply the SecretProviderClass definitions
+kubectl apply -f smtp-relay/examples/secretproviderclass-appreg.yaml
+kubectl apply -f smtp-relay/examples/secretproviderclass-users.yaml
+kubectl apply -f smtp-relay/examples/secretproviderclass-tls.yaml  # Optional
+```
 
-# Install the chart
+See example files:
+- [secretproviderclass-appreg.yaml](smtp-relay/examples/secretproviderclass-appreg.yaml)
+- [secretproviderclass-users.yaml](smtp-relay/examples/secretproviderclass-users.yaml)
+- [secretproviderclass-tls.yaml](smtp-relay/examples/secretproviderclass-tls.yaml)
+
+**2. Create secrets in Google Secret Manager:**
+
+```bash
+# App Registration secrets
+gcloud secrets create smtp2graph-tenant --data-file=- <<EOF
+your-tenant-name
+EOF
+
+gcloud secrets create smtp2graph-app-id --data-file=- <<EOF
+01234567-89ab-cdef-0123-456789abcdef
+EOF
+
+gcloud secrets create smtp2graph-cert-thumbprint --data-file=- <<EOF
+0123456789ABCDEF0123456789ABCDEF01234567
+EOF
+
+gcloud secrets create smtp2graph-cert-key --data-file=./client.key
+
+# SMTP Users
+gcloud secrets create smtp2graph-users --data-file=./users.json
+```
+
+**3. Grant IAM permissions:**
+
+```bash
+# For each secret, grant access to your Kubernetes service account
+gcloud secrets add-iam-policy-binding smtp2graph-tenant \
+  --member="serviceAccount:YOUR_PROJECT_ID.svc.id.goog[default/smtp-relay]" \
+  --role="roles/secretmanager.secretAccessor"
+
+# Repeat for all secrets
+```
+
+**4. Configure Workload Identity:**
+
+```bash
+# Annotate the Kubernetes service account
+kubectl annotate serviceaccount smtp-relay \
+  iam.gke.io/gcp-service-account=YOUR_GSA@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+# Bind Google Service Account to Kubernetes Service Account
+gcloud iam service-accounts add-iam-policy-binding \
+  YOUR_GSA@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --role roles/iam.workloadIdentityUser \
+  --member "serviceAccount:YOUR_PROJECT_ID.svc.id.goog[default/smtp-relay]"
+```
+
+### 2. Install the Chart
+
+#### Using Kubernetes Secrets (Default):
+
+```bash
+# Install the chart with Kubernetes secrets
 helm install smtp-relay ./smtp-relay \
   --set secrets.appRegistration.secretName=smtp2graph-appreg \
   --set secrets.smtpUsers.secretName=smtp2graph-users
+```
+
+#### Using Google Cloud Secret Manager:
+
+```bash
+# Install the chart with GCP Secret Manager
+helm install smtp-relay ./smtp-relay \
+  --set secrets.appRegistration.useSecretProviderClass=true \
+  --set secrets.appRegistration.secretProviderClass.name=smtp2graph-appreg-spc \
+  --set secrets.smtpUsers.useSecretProviderClass=true \
+  --set secrets.smtpUsers.secretProviderClass.name=smtp2graph-users-spc
+```
+
+Or create a custom values file:
+
+```yaml
+# values-gcp.yaml
+secrets:
+  appRegistration:
+    enabled: true
+    useSecretProviderClass: true
+    secretProviderClass:
+      name: "smtp2graph-appreg-spc"
+      mountPath: "/mnt/secrets-store/appreg"
+      tenantFile: "tenant"
+      appIdFile: "appId"
+      certificateThumbprintFile: "certificateThumbprint"
+      certificateKeyFile: "certificateKey"
+
+  smtpUsers:
+    enabled: true
+    useSecretProviderClass: true
+    secretProviderClass:
+      name: "smtp2graph-users-spc"
+      mountPath: "/mnt/secrets-store/users"
+      usersFile: "users"
+```
+
+Then install:
+
+```bash
+helm install smtp-relay ./smtp-relay -f values-gcp.yaml
 ```
 
 ### 3. Verify Installation
@@ -196,6 +312,42 @@ helm install smtp-relay ./smtp-relay \
 helm install smtp-relay ./smtp-relay \
   --set service.loadBalancerSourceRanges={10.0.0.0/8,192.168.0.0/16}
 ```
+
+### Google Cloud Secret Manager Integration
+
+The chart supports **Google Cloud Secret Manager** as an alternative to Kubernetes Secrets, providing:
+
+1. **Centralized Secret Management**: Store secrets in GCP Secret Manager
+2. **Automatic Rotation**: Secrets are fetched at pod startup
+3. **Fine-grained IAM**: Control access using GCP IAM policies
+4. **Audit Logging**: Track secret access in Cloud Logging
+5. **Workload Identity**: Secure authentication without service account keys
+
+**How it works:**
+1. Secrets are stored in Google Secret Manager
+2. `SecretProviderClass` resources define which secrets to mount
+3. The Secrets Store CSI Driver mounts secrets as files in the pod
+4. The initContainer reads these files and merges them into the SMTP2Graph config
+
+**Architecture:**
+```
+Google Secret Manager → SecretProviderClass → CSI Driver → Pod Volume → InitContainer → Config Merge
+```
+
+**Setup Requirements:**
+- GKE cluster with Workload Identity enabled
+- Secrets Store CSI Driver installed: [Installation Guide](https://secrets-store-csi-driver.sigs.k8s.io/getting-started/installation.html)
+- Google Cloud Secret Manager API enabled
+- Appropriate IAM permissions configured
+
+**Advantages over Kubernetes Secrets:**
+- ✅ Secrets never stored in etcd
+- ✅ Centralized management across multiple clusters
+- ✅ Built-in versioning and rotation
+- ✅ Integration with GCP security ecosystem
+- ✅ Compliance-friendly audit trails
+
+See the [examples directory](smtp-relay/examples/) for complete SecretProviderClass templates.
 
 ## Upgrading
 
