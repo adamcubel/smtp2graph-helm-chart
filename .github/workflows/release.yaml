@@ -32,7 +32,7 @@ jobs:
           echo "Commit message: $COMMIT_MSG"
 
           # Get current version from Chart.yaml
-          CURRENT_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
+          CURRENT_VERSION=$(grep '^version:' smtp-relay/Chart.yaml | awk '{print $2}')
           echo "Current version: $CURRENT_VERSION"
 
           # Parse version
