@@ -77,12 +77,14 @@ spec:
               # Merge SMTP users from secret
               echo "Merging SMTP users..."
               echo "$SMTP_USERS" > /tmp/users.json
-              yq eval -i '.receive.users = load("/tmp/users.json")' /data/config.yml
+              # Convert JSON array to YAML and merge into config
+              yq eval -i '.receive.users = (load("/tmp/users.json") | from_json)' /data/config.yml
               {{- end }}
 
               {{- if .Values.secrets.tls.enabled }}
               # Copy TLS certificates
               echo "Setting up TLS certificates..."
+              mkdir -p /data/tls/
               cp /tls-secret/tls.crt /data/tls/tls.crt
               cp /tls-secret/tls.key /data/tls/tls.key
               chmod -R 444 /data/tls/
