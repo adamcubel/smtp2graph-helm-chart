@@ -52,24 +52,30 @@ spec:
               {{- if .Values.secrets.appRegistration.enabled }}
               # Merge Azure App Registration details
               echo "Merging app registration details..."
+              TENANT=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.tenantKey }})
+              APP_ID=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.appIdKey }})
+              CERT_THUMBPRINT=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.certificateThumbprintKey }})
+
               yq eval -i '.send.appReg.tenant = strenv(TENANT)' /data/config.yml
               yq eval -i '.send.appReg.id = strenv(APP_ID)' /data/config.yml
               yq eval -i '.send.appReg.certificate.thumbprint = strenv(CERT_THUMBPRINT)' /data/config.yml
               yq eval -i '.send.appReg.certificate.privateKeyPath = "/data/secrets/client.key"' /data/config.yml
 
-              # Write certificate key to file
-              echo "$CERT_KEY" > /data/secrets/client.key
+              # Copy certificate key to file
+              cp /secrets/app-registration/{{ .Values.secrets.appRegistration.certificateKeyKey }} /data/secrets/client.key
 
               {{- if .Values.secrets.appRegistration.clientSecretKey }}
               # Use client secret instead of certificate if provided
-              if [ ! -z "$CLIENT_SECRET" ]; then
+              if [ -f "/secrets/app-registration/{{ .Values.secrets.appRegistration.clientSecretKey }}" ]; then
+                CLIENT_SECRET=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.clientSecretKey }})
                 yq eval -i '.send.appReg.secret = strenv(CLIENT_SECRET)' /data/config.yml
                 yq eval -i 'del(.send.appReg.certificate)' /data/config.yml
               fi
               {{- end }}
 
               {{- if .Values.secrets.appRegistration.forceMailboxKey }}
-              if [ ! -z "$FORCE_MAILBOX" ]; then
+              if [ -f "/secrets/app-registration/{{ .Values.secrets.appRegistration.forceMailboxKey }}" ]; then
+                FORCE_MAILBOX=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.forceMailboxKey }})
                 yq eval -i '.send.forceMailbox = strenv(FORCE_MAILBOX)' /data/config.yml
               fi
               {{- end }}
@@ -78,75 +84,27 @@ spec:
               {{- if .Values.secrets.smtpUsers.enabled }}
               # Merge SMTP users from secret
               echo "Merging SMTP users..."
-              echo "$SMTP_USERS" > /tmp/users.json
+              cp /secrets/smtp-users/{{ .Values.secrets.smtpUsers.key }} /tmp/users.json
               # Convert JSON to YAML first, then merge
               yq -p=json -o=yaml /tmp/users.json > /tmp/users.yaml
               yq eval -i '.receive.users = load("/tmp/users.yaml")' /data/config.yml
               {{- end }}
 
-              {{- if .Values.secrets.tls.enabled }}
-              # Copy TLS certificates
-              echo "Setting up TLS certificates..."
-              cp /tls-secret/tls.crt /data/tls/tls.crt
-              cp /tls-secret/tls.key /data/tls/tls.key
-              {{- end }}
-
               echo "Configuration merge complete!"
               cat /data/config.yml
-          env:
-            {{- if .Values.secrets.appRegistration.enabled }}
-            - name: TENANT
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.appRegistration.secretName }}
-                  key: {{ .Values.secrets.appRegistration.tenantKey }}
-            - name: APP_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.appRegistration.secretName }}
-                  key: {{ .Values.secrets.appRegistration.appIdKey }}
-            - name: CERT_THUMBPRINT
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.appRegistration.secretName }}
-                  key: {{ .Values.secrets.appRegistration.certificateThumbprintKey }}
-            - name: CERT_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.appRegistration.secretName }}
-                  key: {{ .Values.secrets.appRegistration.certificateKeyKey }}
-            {{- if .Values.secrets.appRegistration.clientSecretKey }}
-            - name: CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.appRegistration.secretName }}
-                  key: {{ .Values.secrets.appRegistration.clientSecretKey }}
-                  optional: true
-            {{- end }}
-            {{- if .Values.secrets.appRegistration.forceMailboxKey }}
-            - name: FORCE_MAILBOX
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.appRegistration.secretName }}
-                  key: {{ .Values.secrets.appRegistration.forceMailboxKey }}
-                  optional: true
-            {{- end }}
-            {{- end }}
-            {{- if .Values.secrets.smtpUsers.enabled }}
-            - name: SMTP_USERS
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.smtpUsers.secretName }}
-                  key: {{ .Values.secrets.smtpUsers.key }}
-            {{- end }}
           volumeMounts:
             - name: base-config
               mountPath: /config
             - name: data
               mountPath: /data
-            {{- if .Values.secrets.tls.enabled }}
-            - name: tls-secret
-              mountPath: /tls-secret
+            {{- if .Values.secrets.appRegistration.enabled }}
+            - name: app-registration-secret
+              mountPath: /secrets/app-registration
+              readOnly: true
+            {{- end }}
+            {{- if .Values.secrets.smtpUsers.enabled }}
+            - name: smtp-users-secret
+              mountPath: /secrets/smtp-users
               readOnly: true
             {{- end }}
       containers:
@@ -176,6 +134,11 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            {{- if .Values.secrets.tls.enabled }}
+            - name: tls-secret
+              mountPath: /data/tls
+              readOnly: true
+            {{- end }}
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -189,6 +152,16 @@ spec:
         - name: tls-secret
           secret:
             secretName: {{ .Values.secrets.tls.secretName }}
+        {{- end }}
+        {{- if .Values.secrets.appRegistration.enabled }}
+        - name: app-registration-secret
+          secret:
+            secretName: {{ .Values.secrets.appRegistration.secretName }}
+        {{- end }}
+        {{- if .Values.secrets.smtpUsers.enabled }}
+        - name: smtp-users-secret
+          secret:
+            secretName: {{ .Values.secrets.smtpUsers.secretName }}
         {{- end }}
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
