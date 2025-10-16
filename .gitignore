@@ -159,3 +159,5 @@ docs/_build/
 
 # Custom ignore patterns
 # Add your project-specific ignores below
+ca
+certs
