@@ -52,9 +52,9 @@ spec:
               {{- if .Values.secrets.appRegistration.enabled }}
               # Merge Azure App Registration details
               echo "Merging app registration details..."
-              TENANT=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.tenantKey }})
-              APP_ID=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.appIdKey }})
-              CERT_THUMBPRINT=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.certificateThumbprintKey }})
+              export TENANT=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.tenantKey }})
+              export APP_ID=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.appIdKey }})
+              export CERT_THUMBPRINT=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.certificateThumbprintKey }})
 
               yq eval -i '.send.appReg.tenant = strenv(TENANT)' /data/config.yml
               yq eval -i '.send.appReg.id = strenv(APP_ID)' /data/config.yml
@@ -67,7 +67,7 @@ spec:
               {{- if .Values.secrets.appRegistration.clientSecretKey }}
               # Use client secret instead of certificate if provided
               if [ -f "/secrets/app-registration/{{ .Values.secrets.appRegistration.clientSecretKey }}" ]; then
-                CLIENT_SECRET=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.clientSecretKey }})
+                export CLIENT_SECRET=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.clientSecretKey }})
                 yq eval -i '.send.appReg.secret = strenv(CLIENT_SECRET)' /data/config.yml
                 yq eval -i 'del(.send.appReg.certificate)' /data/config.yml
               fi
@@ -75,7 +75,7 @@ spec:
 
               {{- if .Values.secrets.appRegistration.forceMailboxKey }}
               if [ -f "/secrets/app-registration/{{ .Values.secrets.appRegistration.forceMailboxKey }}" ]; then
-                FORCE_MAILBOX=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.forceMailboxKey }})
+                export FORCE_MAILBOX=$(cat /secrets/app-registration/{{ .Values.secrets.appRegistration.forceMailboxKey }})
                 yq eval -i '.send.forceMailbox = strenv(FORCE_MAILBOX)' /data/config.yml
               fi
               {{- end }}
@@ -84,9 +84,7 @@ spec:
               {{- if .Values.secrets.smtpUsers.enabled }}
               # Merge SMTP users from secret
               echo "Merging SMTP users..."
-              cp /secrets/smtp-users/{{ .Values.secrets.smtpUsers.key }} /tmp/users.json
-              # Convert JSON to YAML first, then merge
-              yq -p=json -o=yaml /tmp/users.json > /tmp/users.yaml
+              yq -p=json -o=yaml /secrets/smtp-users/{{ .Values.secrets.smtpUsers.key }} > /tmp/users.yaml
               yq eval -i '.receive.users = load("/tmp/users.yaml")' /data/config.yml
               {{- end }}
 
